@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>釜山旅遊行程 🇰🇷</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --d1: #FF6B6B; --d2: #4ECDC4; --d3: #45B7D1; --d4: #96CEB4; --d5: #DDA0DD;
+    --bg: #0F0F1A; --surface: #1A1A2E; --card: #16213E; --border: #2A2A4A;
+    --text: #E8E8F0; --muted: #8888AA;
+  }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Header */
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; z-index: 100; }
+  .header-title { font-size: 16px; font-weight: 700; letter-spacing: 0.3px; }
+  .header-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .header-badge { background: #FF6B6B22; border: 1px solid #FF6B6B44; color: #FF6B6B; padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; margin-left: auto; }
+
+  /* Day tabs */
+  .day-tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; flex-shrink: 0; scrollbar-width: none; }
+  .day-tabs::-webkit-scrollbar { display: none; }
+  .day-tab { flex: 1; min-width: 80px; padding: 10px 8px; text-align: center; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; white-space: nowrap; }
+  .day-tab .tab-label { font-size: 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .day-tab .tab-day { font-size: 13px; font-weight: 700; margin-top: 2px; }
+  .day-tab .tab-theme { font-size: 10px; color: var(--muted); margin-top: 1px; }
+  .day-tab.active { background: var(--card); }
+  .day-tab[data-day="0"].active { border-bottom-color: var(--d1); } .day-tab[data-day="0"].active .tab-day { color: var(--d1); }
+  .day-tab[data-day="1"].active { border-bottom-color: var(--d2); } .day-tab[data-day="1"].active .tab-day { color: var(--d2); }
+  .day-tab[data-day="2"].active { border-bottom-color: var(--d3); } .day-tab[data-day="2"].active .tab-day { color: var(--d3); }
+  .day-tab[data-day="3"].active { border-bottom-color: var(--d4); } .day-tab[data-day="3"].active .tab-day { color: var(--d4); }
+  .day-tab[data-day="4"].active { border-bottom-color: var(--d5); } .day-tab[data-day="4"].active .tab-day { color: var(--d5); }
+
+  /* Main layout */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* Timeline panel */
+  .timeline-panel { width: 320px; min-width: 280px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+  .timeline-scroll { overflow-y: auto; flex: 1; padding: 16px 12px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .timeline-scroll::-webkit-scrollbar { width: 4px; }
+  .timeline-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* Timeline items */
+  .tl-item { display: flex; gap: 10px; margin-bottom: 4px; cursor: pointer; border-radius: 10px; padding: 8px; transition: background 0.15s; position: relative; }
+  .tl-item:hover { background: var(--card); }
+  .tl-item.active { background: var(--card); }
+  .tl-line { display: flex; flex-direction: column; align-items: center; width: 28px; flex-shrink: 0; }
+  .tl-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; border: 2px solid transparent; transition: all 0.2s; }
+  .tl-item.active .tl-dot { transform: scale(1.15); box-shadow: 0 0 12px currentColor; }
+  .tl-connector { width: 2px; flex: 1; min-height: 8px; margin: 2px 0; opacity: 0.3; }
+  .tl-content { flex: 1; padding-top: 3px; }
+  .tl-time { font-size: 10px; color: var(--muted); font-weight: 600; margin-bottom: 2px; }
+  .tl-name { font-size: 13px; font-weight: 600; line-height: 1.3; }
+  .tl-desc { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+  .tl-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+  .tl-tag { font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: 500; }
+
+  /* Map */
+  #map { flex: 1; }
+
+  /* Popup */
+  .leaflet-popup-content-wrapper { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+  .leaflet-popup-tip { background: var(--card); }
+  .popup-emoji { font-size: 24px; text-align: center; margin-bottom: 6px; }
+  .popup-name { font-size: 14px; font-weight: 700; }
+  .popup-time { font-size: 11px; margin-top: 3px; opacity: 0.7; }
+  .popup-desc { font-size: 12px; margin-top: 6px; line-height: 1.5; opacity: 0.85; }
+
+  /* Info overlay */
+  .day-info { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 500; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 8px 16px; font-size: 12px; font-weight: 600; white-space: nowrap; backdrop-filter: blur(10px); pointer-events: none; display: flex; align-items: center; gap: 8px; }
+  .day-info-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* Mobile */
+  @media (max-width: 640px) {
+    .timeline-panel { width: 100%; position: fixed; bottom: 0; left: 0; right: 0; z-index: 200; height: 50dvh; border-right: none; border-top: 1px solid var(--border); transform: translateY(100%); transition: transform 0.3s ease; }
+    .timeline-panel.open { transform: translateY(0); }
+    .main { flex-direction: column; }
+    #map { height: 100dvh; }
+    .map-toggle { position: fixed; bottom: 16px; right: 16px; z-index: 300; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 50%; width: 52px; height: 52px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+  }
+  @media (min-width: 641px) {
+    .map-toggle { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="font-size:24px">🇰🇷</div>
+  <div>
+    <div class="header-title">釜山旅遊行程</div>
+    <div class="header-sub">2026年6月5日 — 9日</div>
+  </div>
+  <div class="header-badge">5天4夜</div>
+</header>
+
+<div class="day-tabs" id="dayTabs"></div>
+
+<div class="main">
+  <div class="timeline-panel" id="timelinePanel">
+    <div class="timeline-scroll" id="timelineScroll"></div>
+  </div>
+  <div style="flex:1;position:relative;">
+    <div id="map"></div>
+    <div class="day-info" id="dayInfo">
+      <div class="day-info-dot" id="dayInfoDot"></div>
+      <span id="dayInfoText"></span>
+    </div>
+  </div>
+</div>
+
+<button class="map-toggle" id="mapToggle" onclick="toggleTimeline()">📋</button>
+
+<script>
+const DAYS = [
+  { label: "Day 1", date: "6/5 Fri", theme: "海雲台", color: "#FF6B6B",
+    spots: [
+      { time: "02:40", name: "桃園機場出發", emoji: "✈️", lat: 25.0777, lng: 121.2329, desc: "桃園→釜山，飛行約2.5小時", tags: ["交通"], type: "transport" },
+      { time: "06:10", name: "金海國際機場抵達", emoji: "🛬", lat: 35.1795, lng: 128.9386, desc: "抵達釜山金海機場", tags: ["交通"], type: "transport" },
+      { time: "07:00", name: "飯店寄放行李", emoji: "🏨", lat: 35.1628, lng: 129.1598, desc: "海雲台飯店寄放行李", tags: ["住宿"], type: "hotel" },
+      { time: "07:50", name: "早餐", emoji: "🍳", lat: 35.1620, lng: 129.1580, desc: "附近輕鬆用餐", tags: ["美食"], type: "food" },
+      { time: "09:00", name: "SPA LAND 汗蒸幕", emoji: "♨️", lat: 35.1702, lng: 129.1311, desc: "新世界百貨SPA LAND，開放至深夜 ₩78,000", tags: ["體驗", "必去"], type: "activity" },
+      { time: "11:00", name: "醬蟹餐廳（간장게장）", emoji: "🦀", lat: 35.1640, lng: 129.1600, desc: "正宗釜山醬蟹料理", tags: ["美食"], type: "food" },
+      { time: "13:00", name: "膠囊列車 五井→青沙浦", emoji: "🚃", lat: 35.1500, lng: 129.1980, desc: "海岸膠囊列車，懸崖邊絕景路線", tags: ["體驗", "打卡"], type: "activity" },
+      { time: "14:30", name: "Liberta Cafe", emoji: "☕", lat: 35.1490, lng: 129.1960, desc: "網美咖啡廳，海景打卡", tags: ["咖啡", "打卡"], type: "cafe" },
+      { time: "16:00", name: "海雲台傳統市場", emoji: "🛍️", lat: 35.1582, lng: 129.1612, desc: "傳統市場，必買甜食小點", tags: ["購物", "美食"], type: "shopping" },
+      { time: "19:00", name: "飯店入住休息", emoji: "🌙", lat: 35.1628, lng: 129.1598, desc: "早班機後好好休息", tags: ["住宿"], type: "hotel" },
+    ]
+  },
+  { label: "Day 2", date: "6/6 Sat", theme: "廣安里", color: "#4ECDC4",
+    spots: [
+      { time: "09:30", name: "Working Holiday Brunch Cafe", emoji: "🥞", lat: 35.1531, lng: 129.1182, desc: "廣安里網紅早午餐，09:30-18:00", tags: ["美食", "打卡"], type: "food" },
+      { time: "11:00", name: "V Vanilla House 選物店", emoji: "👗", lat: 35.1540, lng: 129.1190, desc: "韓系精選服飾品牌", tags: ["購物"], type: "shopping" },
+      { time: "11:30", name: "Breeze Archive", emoji: "🧥", lat: 35.1535, lng: 129.1185, desc: "韓系精選品牌", tags: ["購物"], type: "shopping" },
+      { time: "12:00", name: "Cosy Mosy 選物店", emoji: "🎀", lat: 35.1538, lng: 129.1192, desc: "可愛風格精選品牌", tags: ["購物"], type: "shopping" },
+      { time: "13:00", name: "廣安里午餐", emoji: "🍱", lat: 35.1545, lng: 129.1200, desc: "廣安里當地韓式料理", tags: ["美食"], type: "food" },
+      { time: "15:00", name: "廣安里海水浴場", emoji: "🏖️", lat: 35.1531, lng: 129.1250, desc: "廣安大橋絕景海灘，拍照聖地", tags: ["景點", "打卡"], type: "sight" },
+      { time: "17:00", name: "廣安里海景咖啡廳", emoji: "☕", lat: 35.1530, lng: 129.1240, desc: "廣安大橋夕陽下午茶", tags: ["咖啡", "打卡"], type: "cafe" },
+      { time: "19:00", name: "廣安里晚餐", emoji: "🍽️", lat: 35.1528, lng: 129.1230, desc: "海濱餐廳晚餐（部分需訂位）", tags: ["美食"], type: "food" },
+    ]
+  },
+  { label: "Day 3", date: "6/7 Sun", theme: "影島・松島", color: "#45B7D1",
+    spots: [
+      { time: "10:00", name: "ARTE MUSEUM Busan（可選）", emoji: "🎨", lat: 35.0980, lng: 129.0350, desc: "沉浸式數位藝術美術館", tags: ["藝術", "打卡"], type: "activity" },
+      { time: "12:00", name: "해녀 Market 海女市場", emoji: "🦑", lat: 35.0800, lng: 129.0200, desc: "松島海女市場新鮮海產，邊走邊吃", tags: ["美食", "必去"], type: "food" },
+      { time: "14:00", name: "흰여울문화마을 白淵文化村", emoji: "🏘️", lat: 35.0849, lng: 129.0268, desc: "懸崖山坡彩繪村，影島必訪絕景", tags: ["景點", "打卡"], type: "sight" },
+      { time: "15:30", name: "松島海上纜車", emoji: "🚡", lat: 35.0759, lng: 129.0153, desc: "松島灣海景纜車，玻璃底板可選", tags: ["體驗", "打卡"], type: "activity" },
+      { time: "17:00", name: "松島海水浴場", emoji: "🌅", lat: 35.0780, lng: 129.0170, desc: "夕陽時分漫步松島海灘", tags: ["景點"], type: "sight" },
+      { time: "18:30", name: "西面 BBQ 燒烤", emoji: "🥩", lat: 35.1579, lng: 129.0586, desc: "西面美食街韓式燒肉晚餐", tags: ["美食", "必吃"], type: "food" },
+      { time: "20:00", name: "Olive Young 西面旗艦店", emoji: "💄", lat: 35.1570, lng: 129.0590, desc: "韓國最大藥妝，掃貨必停", tags: ["購物"], type: "shopping" },
+    ]
+  },
+  { label: "Day 4", date: "6/8 Mon", theme: "購物日", color: "#96CEB4",
+    spots: [
+      { time: "11:00", name: "밀면원 豬肉湯飯（米其林）", emoji: "🍲", lat: 35.1600, lng: 129.0600, desc: "米其林推薦，50年老店，11點準時到", tags: ["美食", "必吃"], type: "food" },
+      { time: "13:00", name: "新世界百貨 센텀시티", emoji: "🏬", lat: 35.1702, lng: 129.1311, desc: "全球最大百貨公司之一，世界紀錄", tags: ["購物", "必去"], type: "shopping" },
+      { time: "14:30", name: "樂天百貨 센텀시티", emoji: "🛒", lat: 35.1698, lng: 129.1300, desc: "樂天百貨購物，免稅店", tags: ["購物"], type: "shopping" },
+      { time: "16:00", name: "蔘雞湯午餐（50年老店）", emoji: "🍗", lat: 35.1610, lng: 129.0610, desc: "50年歷史傳統蔘雞湯", tags: ["美食"], type: "food" },
+      { time: "17:30", name: "西面商業街", emoji: "🛍️", lat: 35.1579, lng: 129.0586, desc: "地下商圈＋路邊攤，韓系穿搭掃貨", tags: ["購物"], type: "shopping" },
+      { time: "19:30", name: "西面晚餐", emoji: "🍻", lat: 35.1575, lng: 129.0580, desc: "西面美食街，炸雞啤酒必嘗", tags: ["美食"], type: "food" },
+    ]
+  },
+  { label: "Day 5", date: "6/9 Tue", theme: "返程日", color: "#DDA0DD",
+    spots: [
+      { time: "11:00", name: "飯店退房", emoji: "🧳", lat: 35.1628, lng: 129.1598, desc: "整理行李，辦理退房", tags: ["住宿"], type: "hotel" },
+      { time: "11:30", name: "Skyline Luge Busan", emoji: "🛷", lat: 35.1627, lng: 129.1600, desc: "海雲台山坡滑車，超刺激！", tags: ["體驗", "必玩"], type: "activity" },
+      { time: "14:00", name: "最後午餐", emoji: "🍜", lat: 35.1630, lng: 129.1590, desc: "海雲台附近最後一頓韓食", tags: ["美食"], type: "food" },
+      { time: "17:00", name: "前往金海機場", emoji: "🚌", lat: 35.1795, lng: 128.9386, desc: "搭機場巴士/地鐵前往機場", tags: ["交通"], type: "transport" },
+      { time: "21:05", name: "釜山出發回台灣", emoji: "✈️", lat: 35.1795, lng: 128.9386, desc: "金海機場→桃園，21:05起飛 抵達22:25", tags: ["交通"], type: "transport" },
+    ]
+  }
+];
+
+const TAG_COLORS = {
+  "交通": "#8888AA", "住宿": "#DDA0DD", "美食": "#FF9F43", "體驗": "#54A0FF",
+  "購物": "#5F27CD", "景點": "#01CBC6", "咖啡": "#A29BFE", "打卡": "#FD79A8",
+  "必去": "#FF6B6B", "必吃": "#FF6B6B", "必玩": "#FF6B6B", "藝術": "#FDCB6E"
+};
+
+const TYPE_ICONS = {
+  transport: "🚗", hotel: "🏨", food: "🍽️", activity: "⭐", cafe: "☕", shopping: "🛍️", sight: "📸"
+};
+
+let map, activeDay = 0, activeSpot = null;
+let markers = [], polylines = [];
+
+function initMap() {
+  map = L.map('map', { zoomControl: false }).setView([35.1200, 129.0800], 13);
+  L.control.zoom({ position: 'topright' }).addTo(map);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © CARTO', maxZoom: 19
+  }).addTo(map);
+}
+
+function createMarkerIcon(color, emoji, isActive = false) {
+  const size = isActive ? 42 : 34;
+  return L.divIcon({
+    html: `<div style="width:${size}px;height:${size}px;background:${color};border:${isActive ? 3 : 2}px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:${isActive ? 18 : 15}px;box-shadow:0 2px ${isActive ? 16 : 8}px ${color}88;transition:all 0.2s">${emoji}</div>`,
+    className: '', iconSize: [size, size], iconAnchor: [size/2, size/2]
+  });
+}
+
+function clearMap() {
+  markers.forEach(m => map.removeLayer(m));
+  polylines.forEach(p => map.removeLayer(p));
+  markers = []; polylines = [];
+}
+
+function renderDay(dayIdx) {
+  activeDay = dayIdx;
+  activeSpot = null;
+  clearMap();
+  renderTabs();
+  renderTimeline();
+
+  const day = DAYS[dayIdx];
+  const validSpots = day.spots.filter(s => s.lat && s.lng);
+  const bounds = [];
+
+  validSpots.forEach((spot, i) => {
+    const marker = L.marker([spot.lat, spot.lng], {
+      icon: createMarkerIcon(day.color, spot.emoji)
+    }).addTo(map);
+
+    marker.bindPopup(`
+      <div style="min-width:180px">
+        <div class="popup-emoji">${spot.emoji}</div>
+        <div class="popup-name">${spot.name}</div>
+        <div class="popup-time">${spot.time} · Day ${dayIdx + 1}</div>
+        ${spot.desc ? `<div class="popup-desc">${spot.desc}</div>` : ''}
+      </div>
+    `, { maxWidth: 240 });
+
+    marker.on('click', () => setActiveSpot(dayIdx, i));
+    markers.push(marker);
+    bounds.push([spot.lat, spot.lng]);
+  });
+
+  // Draw route line
+  if (validSpots.length > 1) {
+    const coords = validSpots.map(s => [s.lat, s.lng]);
+    const poly = L.polyline(coords, {
+      color: day.color, weight: 2.5, opacity: 0.5,
+      dashArray: '6, 8'
+    }).addTo(map);
+    polylines.push(poly);
+  }
+
+  if (bounds.length > 0) {
+    map.fitBounds(bounds, { padding: [40, 40] });
+  }
+
+  // Update info bar
+  document.getElementById('dayInfoDot').style.background = day.color;
+  document.getElementById('dayInfoText').textContent = `Day ${dayIdx + 1} · ${day.date} · ${day.theme} · ${day.spots.length}個景點`;
+}
+
+function setActiveSpot(dayIdx, spotIdx) {
+  activeSpot = spotIdx;
+  const day = DAYS[dayIdx];
+  const spot = day.spots[spotIdx];
+
+  // Update marker icons
+  markers.forEach((m, i) => {
+    m.setIcon(createMarkerIcon(day.color, day.spots[i].emoji, i === spotIdx));
+  });
+
+  // Pan to marker
+  map.panTo([spot.lat, spot.lng], { animate: true, duration: 0.5 });
+  markers[spotIdx]?.openPopup();
+
+  // Highlight timeline item
+  renderTimeline(spotIdx);
+  const el = document.querySelector(`.tl-item[data-idx="${spotIdx}"]`);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderTabs() {
+  const container = document.getElementById('dayTabs');
+  container.innerHTML = DAYS.map((d, i) => `
+    <div class="day-tab ${i === activeDay ? 'active' : ''}" data-day="${i}" onclick="renderDay(${i})">
+      <div class="tab-label">${d.label}</div>
+      <div class="tab-day">${d.date}</div>
+      <div class="tab-theme">${d.theme}</div>
+    </div>
+  `).join('');
+}
+
+function renderTimeline(highlightIdx = -1) {
+  const day = DAYS[activeDay];
+  const container = document.getElementById('timelineScroll');
+  container.innerHTML = day.spots.map((spot, i) => {
+    const isLast = i === day.spots.length - 1;
+    const tagHtml = (spot.tags || []).map(t =>
+      `<span class="tl-tag" style="background:${(TAG_COLORS[t] || '#555')}22;color:${TAG_COLORS[t] || '#aaa'};border:1px solid ${(TAG_COLORS[t] || '#555')}44">${t}</span>`
+    ).join('');
+    return `
+      <div class="tl-item ${i === highlightIdx ? 'active' : ''}" data-idx="${i}" onclick="setActiveSpot(${activeDay},${i})">
+        <div class="tl-line">
+          <div class="tl-dot" style="background:${day.color}22;color:${day.color};border-color:${day.color}66">${spot.emoji}</div>
+          ${!isLast ? `<div class="tl-connector" style="background:${day.color}"></div>` : ''}
+        </div>
+        <div class="tl-content">
+          <div class="tl-time">${spot.time}</div>
+          <div class="tl-name">${spot.name}</div>
+          ${spot.desc ? `<div class="tl-desc">${spot.desc}</div>` : ''}
+          ${tagHtml ? `<div class="tl-tags">${tagHtml}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleTimeline() {
+  const panel = document.getElementById('timelinePanel');
+  const btn = document.getElementById('mapToggle');
+  panel.classList.toggle('open');
+  btn.textContent = panel.classList.contains('open') ? '🗺️' : '📋';
+}
+
+// Init
+initMap();
+renderDay(0);
+</script>
+</body>
+</html>
