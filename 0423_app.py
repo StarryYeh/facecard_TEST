@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, request, send_from_directory, render_template
-import os, csv, json, sqlite3
+import os, csv, json
 
 app = Flask(__name__)
 
@@ -125,98 +125,6 @@ def toggle_met():
 @app.route("/<path:path>")
 def serve_file(path):
     return send_from_directory(BASE_DIR, path)
-
-# ──────────────────────────────────────────────
-#  TRIP APP — SQLite DB + API
-# ──────────────────────────────────────────────
-DB_PATH = os.path.join(BASE_DIR, "trip.db")
-
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def init_trip_db():
-    with get_db() as conn:
-        conn.execute('''CREATE TABLE IF NOT EXISTS expenses (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at  TEXT    DEFAULT (datetime('now','localtime')),
-            name        TEXT    NOT NULL,
-            amount      REAL    NOT NULL,
-            currency    TEXT    DEFAULT 'KRW',
-            payer       TEXT    NOT NULL,
-            participants TEXT   NOT NULL DEFAULT '[]',
-            day_num     INTEGER DEFAULT 0,
-            note        TEXT    DEFAULT ''
-        )''')
-        conn.execute('''CREATE TABLE IF NOT EXISTS config (
-            key   TEXT PRIMARY KEY,
-            value TEXT NOT NULL
-        )''')
-        conn.execute("INSERT OR IGNORE INTO config VALUES ('members', '[]')")
-        conn.execute("INSERT OR IGNORE INTO config VALUES ('krw_rate', '0.023')")
-
-init_trip_db()
-
-@app.route('/trip')
-def trip():
-    return render_template('trip.html')
-
-@app.route('/api/expenses', methods=['GET'])
-def api_get_expenses():
-    with get_db() as conn:
-        rows = conn.execute('SELECT * FROM expenses ORDER BY created_at DESC').fetchall()
-    result = []
-    for r in rows:
-        d = dict(r)
-        try:    d['participants'] = json.loads(d['participants'])
-        except: d['participants'] = []
-        result.append(d)
-    return jsonify(result)
-
-@app.route('/api/expenses', methods=['POST'])
-def api_add_expense():
-    data = request.get_json()
-    if not data:
-        return jsonify({"ok": False, "error": "No data"}), 400
-    try:
-        with get_db() as conn:
-            conn.execute(
-                'INSERT INTO expenses (name,amount,currency,payer,participants,day_num,note) VALUES (?,?,?,?,?,?,?)',
-                (data['name'], float(data['amount']), data.get('currency','KRW'),
-                 data['payer'], json.dumps(data.get('participants',[])),
-                 int(data.get('day_num',0)), data.get('note',''))
-            )
-        return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-@app.route('/api/expenses/<int:eid>', methods=['DELETE'])
-def api_delete_expense(eid):
-    with get_db() as conn:
-        conn.execute('DELETE FROM expenses WHERE id=?', (eid,))
-    return jsonify({"ok": True})
-
-@app.route('/api/config', methods=['GET'])
-def api_get_config():
-    with get_db() as conn:
-        rows = conn.execute('SELECT key, value FROM config').fetchall()
-    result = {}
-    for r in rows:
-        try:    result[r['key']] = json.loads(r['value'])
-        except: result[r['key']] = r['value']
-    return jsonify(result)
-
-@app.route('/api/config', methods=['POST'])
-def api_update_config():
-    data = request.get_json()
-    if not data:
-        return jsonify({"ok": False}), 400
-    with get_db() as conn:
-        for key, value in data.items():
-            v = json.dumps(value) if isinstance(value, (list, dict)) else str(value)
-            conn.execute('INSERT OR REPLACE INTO config VALUES (?,?)', (key, v))
-    return jsonify({"ok": True})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", debug=True, port=5000)
